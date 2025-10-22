@@ -1,207 +1,96 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[codz]
-*$py.class
+"""
+Simple Backtesting Engine -- Moving Average Crossover Strategy
+DescriptionL
+Simulates a simple trading strategy on historical stock data
+using Python's yfinance, pandas, and imported matplotlib.pyplot libraries 
+"""
 
-# C extensions
-*.so
+#-----1. IMPORTED LIBRARIES -----
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+#-----2. DOWNLOAD HISTORICAL DATA -----
+data = yf.download("AAPL", start="2020-01-01", end="2023-01-01", auto_adjust=False)
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+# Keep only the Close price for simplicity
+data = data[['Close']]
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+#-----3. DEFINE STRATEGY PARAMETERS -----
+SHORT_WINDOW = 20
+LONG_WINDOW = 50
+INITIAL_BALANCE = 10000
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py.cover
-.hypothesis/
-.pytest_cache/
-cover/
+#-----4. CALCULATE MOVING AVERAGES -----
+data['Short_MA'] = data['Close'].rolling(window=SHORT_WINDOW).mean()
+data['Long_MA'] = data['Close'].rolling(window=LONG_WINDOW).mean()
 
-# Translations
-*.mo
-*.pot
+# Remove NaN rows from moving averages
+data = data.dropna()
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+#-----5. GENERATE TRADING SIGNALS -----
+# Signal = 1 -> Buy (Short MA above Long MA)
+# Signal = -1 -> Sell (Short MA below Long MA)
+data['Signal'] = 0
+data.loc[data['Short_MA'] > data['Long_MA'], 'Signal'] = 1
+data.loc[data['Short_MA'] < data['Long_MA'], 'Signal'] = -1
 
-# Flask stuff:
-instance/
-.webassets-cache
+#Reset index to ensure clean iteration
+data = data.reset_index(drop=True)
 
-# Scrapy stuff:
-.scrapy
+#-----6. BACKTEST SIMULATION -----
+balance = INITIAL_BALANCE
+position = 0    # Number of shares currently held
+portfolio_values = []
 
-# Sphinx documentation
-docs/_build/
+for i in range(len(data)):
+    price = data['Close'].iloc[i].item()
+    signal = int(data['Signal'].iloc[i])
+    
+    #BUY: when signal says 1 and we hold no shares
+    if signal == 1 and position == 0:
+        position = int(balance // price)  # buy as many shares as possible 
+        balance = 0
+    
+    #SELL: when signal says -1 and we hold shares
+    elif signal == -1 and position > 0:
+        balance = position * price   # sell all shares
+        position = 0
+        
+    # Track total portfolio value (cash + market value of shares)
+    total_value = balance + position * price
+    portfolio_values.append(total_value)
+    
+data['Portfolio'] = portfolio_values
 
-# PyBuilder
-.pybuilder/
-target/
+#-----7. RESULTS -----
+# Final Return & Profit %
+final_value = data['Portfolio'].iloc[-1]
+profit = final_value - INITIAL_BALANCE
+percent_return = profit / INITIAL_BALANCE
 
-# Jupyter Notebook
-.ipynb_checkpoints
+print("FINAL RETURN")
+print(f"Initial Balance: ${INITIAL_BALANCE:,.2f}")
+print(f"Final Balance: ${final_value:,.2f}")
+print(f"Net Profit: ${profit:,.2f} ({percent_return * 100:.2f}%)")
 
-# IPython
-profile_default/
-ipython_config.py
+#-----8. VISUALIZATION -----
+plt.figure(figsize=(12,6))
+plt.plot(data['Close'], label='Stock Price', alpha=0.7)
+plt.plot(data['Short_MA'], label=f'Short {SHORT_WINDOW}-Day MA')
+plt.plot(data['Long_MA'], label=f'Long {LONG_WINDOW}-Day MA')
+plt.title("Moving Average Crossover Strategy - AAPL")
+plt.xlabel("Date")
+plt.ylabel("Price ($)")
+plt.legend()
+plt.grid(True)
+plt.show()
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#uv.lock
-
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-#poetry.toml
-
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#   pdm recommends including project-wide configuration in pdm.toml, but excluding .pdm-python.
-#   https://pdm-project.org/en/latest/usage/project/#working-with-version-control
-#pdm.lock
-#pdm.toml
-.pdm-python
-.pdm-build/
-
-# pixi
-#   Similar to Pipfile.lock, it is generally recommended to include pixi.lock in version control.
-#pixi.lock
-#   Pixi creates a virtual environment in the .pixi directory, just like venv module creates one
-#   in the .venv directory. It is recommended not to include this directory in version control.
-.pixi
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.envrc
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
-
-# Abstra
-# Abstra is an AI-powered process automation framework.
-# Ignore directories containing user credentials, local state, and settings.
-# Learn more at https://abstra.io/docs
-.abstra/
-
-# Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
-#  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
-#  you could uncomment the following to ignore the entire vscode folder
-# .vscode/
-
-# Ruff stuff:
-.ruff_cache/
-
-# PyPI configuration file
-.pypirc
-
-# Cursor
-#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
-#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
-#  refer to https://docs.cursor.com/context/ignore-files
-.cursorignore
-.cursorindexingignore
-
-# Marimo
-marimo/_static/
-marimo/_lsp/
-__marimo__/
+plt.figure(figsize=(12,5))
+plt.plot(data['Portfolio'], label='Portfolio Value')
+plt.title("Portfolio Value Over Time")
+plt.xlabel("Date")
+plt.ylabel("Portfolio ($)")
+plt.legend()
+plt.grid(True)
+plt.show()
